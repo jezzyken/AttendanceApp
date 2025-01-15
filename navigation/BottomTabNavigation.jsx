@@ -20,12 +20,14 @@ const screenOptions = {
   },
 };
 
-const BottomTabNavigation = () => {
+const BottomTabNavigation = ({route}) => {
+  const {teacherId, teacherData} = route.params;
   return (
     <Tab.Navigator screenOptions={screenOptions}>
       <Tab.Screen
         name="Home"
         component={Home}
+        initialParams={{teacherId, teacherData}}
         options={{
           tabBarIcon: ({focused}) => {
             return (
@@ -41,6 +43,7 @@ const BottomTabNavigation = () => {
       <Tab.Screen
         name="Schedule"
         component={Schedule}
+        initialParams={{teacherId, teacherData}}
         options={{
           tabBarIcon: ({focused}) => {
             return (

@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -10,129 +10,67 @@ import {
 } from 'react-native';
 import {Calendar} from 'react-native-calendars';
 import {Surface, Avatar} from 'react-native-paper';
-// import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useNavigation} from '@react-navigation/native';
-
-const attendanceData = {
-  '2024-10-10': [
-    {
-      id: '1',
-      courseName: 'Introduction to Computing',
-      courseCode: 'ITC123',
-      scheduleTime: '10:00am - 12:00pm',
-      noOfStudents: 40,
-    },
-    {
-      id: '2',
-      courseName: 'Data Structures',
-      courseCode: 'DSA234',
-      scheduleTime: '1:00pm - 3:00pm',
-      noOfStudents: 35,
-    },
-  ],
-  '2024-10-15': [
-    {
-      id: '3',
-      courseName: 'Database Management Systems',
-      courseCode: 'DBM345',
-      scheduleTime: '9:00am - 11:00am',
-      noOfStudents: 45,
-    },
-  ],
-  '2024-10-20': [
-    {
-      id: '4',
-      courseName: 'Software Engineering',
-      courseCode: 'SWE456',
-      scheduleTime: '2:00pm - 4:00pm',
-      noOfStudents: 30,
-    },
-    {
-      id: '5',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-    {
-      id: '6',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-    {
-      id: '7',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-    {
-      id: '8',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-    {
-      id: '9',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-    {
-      id: '10',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-    {
-      id: '11',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-    {
-      id: '12',
-      courseName: 'Operating Systems',
-      courseCode: 'OS567',
-      scheduleTime: '4:00pm - 6:00pm',
-      noOfStudents: 38,
-    },
-  ],
-};
+import moment from 'moment';
+import useSchedule from '../hook/useSchedule';
 
 const HEADER_MAX_HEIGHT = 320;
 const HEADER_MIN_HEIGHT = 0;
 const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 const windowHeight = Dimensions.get('window').height;
 
-const CalendarScreen = () => {
+const CalendarScreen = ({route}) => {
+  const {teacherId} = route.params;
   const navigation = useNavigation();
   const [selectedDate, setSelectedDate] = useState('');
-  const [attendance, setAttendance] = useState([]);
+  const [selectedDaySchedules, setSelectedDaySchedules] = useState([]);
+  const [markedDates, setMarkedDates] = useState({});
   const scrollY = useRef(new Animated.Value(0)).current;
+  const {schedules, loading, error, fetchSchedules} = useSchedule();
 
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
+  useEffect(() => {
+    if (teacherId) {
+      fetchSchedules(teacherId);
+    }
+  }, [teacherId]);
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 1, 0],
-    extrapolate: 'clamp',
-  });
+  useEffect(() => {
+    if (schedules?.data?.schedule) {
+      const marks = generateMarkedDates(schedules.data.schedule.rawSchedules);
+      setMarkedDates(marks);
+    }
+  }, [schedules]);
+
+  const generateMarkedDates = scheduleData => {
+    const marks = {};
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    scheduleData.forEach(schedule => {
+      schedule.weekDays.forEach(day => {
+        for (let i = 1; i <= 31; i++) {
+          const date = new Date(currentYear, currentMonth, i);
+          if (date.toLocaleDateString('en-US', {weekday: 'long'}) === day) {
+            const dateString = date.toISOString().split('T')[0];
+            if (!marks[dateString]) {
+              marks[dateString] = {marked: true, dotColor: '#4CAF50'};
+            }
+          }
+        }
+      });
+    });
+
+    return marks;
+  };
 
   const onDayPress = day => {
     const date = day.dateString;
     setSelectedDate(date);
-    setAttendance(attendanceData[date] || []);
+    const selectedDayName = moment(date).format('dddd');
+    
+    const daySchedules = schedules?.data?.schedule?.groupedSchedules[selectedDayName] || [];
+    setSelectedDaySchedules(daySchedules);
   };
 
   const getRandomColor = () => {
@@ -152,136 +90,39 @@ const CalendarScreen = () => {
     <Pressable
       style={styles.courseCard}
       onPress={() =>
-        navigation.navigate('StudentList', {students: getStudents(item.id)})
+        navigation.navigate('StudentList', {
+          classId: item._id,
+          classSchedule: item,
+        })
       }>
       <View style={styles.courseInfo}>
         <Avatar.Text
           size={45}
-          label={item.courseCode.substring(0, 2)}
+          label={item.subject.subjectName.substring(0, 2).toUpperCase()}
           style={[styles.avatar, {backgroundColor: getRandomColor()}]}
         />
         <View style={styles.courseDetails}>
           <View style={styles.courseNameContainer}>
             <Text style={styles.courseName} numberOfLines={1}>
-              {item.courseName}
+              {item.course.courseName}
             </Text>
             <View style={styles.codeContainer}>
-              <Text style={styles.courseCode}>{item.courseCode}</Text>
+              <Text style={styles.courseCode}>{item.section}</Text>
             </View>
           </View>
           <View style={styles.timeContainer}>
-            <Text style={styles.scheduleTime}>{item.scheduleTime}</Text>
+            <Text style={styles.scheduleTime}>
+              {moment(item.startTime, 'HH:mm').format('hh:mm A')} - {moment(item.endTime, 'HH:mm').format('hh:mm A')}
+            </Text>
             <Text style={styles.studentCount}>
-              {item.noOfStudents} Students
+              {item.students.length} Student{item.students.length !== 1 ? 's' : ''}
             </Text>
           </View>
+          <Text style={styles.subjectName}>{item.subject.subjectName}</Text>
         </View>
       </View>
     </Pressable>
   );
-
-  const getStudents = courseId => {
-    const studentsData = {
-      1: [
-        {
-          id: '1',
-          fullName: 'Alice Johnson',
-          imageUrl:
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTg4iLBgHm-o1wj3ckRUfGw8aEjUZcUByOe-g&s',
-          degree: 'BSIT',
-        },
-        {
-          id: '2',
-          fullName: 'Bob Smith',
-          imageUrl:
-            'https://ogre.natalie.mu/media/pp/reona04/photo246.jpg?imwidth=1200&imdensity=1',
-          degree: 'BSIT',
-        },
-        {
-          id: '3',
-          fullName: 'Eve Thompson',
-          imageUrl:
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTg4iLBgHm-o1wj3ckRUfGw8aEjUZcUByOe-g&s',
-          degree: 'BSIT',
-        },
-      ],
-      2: [
-        {
-          id: '11',
-          fullName: 'Charlie Brown',
-          imageUrl:
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTg4iLBgHm-o1wj3ckRUfGw8aEjUZcUByOe-g&s',
-          degree: 'BSCB',
-        },
-        {
-          id: '12',
-          fullName: 'David Lee',
-          imageUrl:
-            'https://ogre.natalie.mu/media/pp/reona04/photo246.jpg?imwidth=1200&imdensity=1',
-          degree: 'BSCB',
-        },
-        {
-          id: '13',
-          fullName: 'Mia Johnson',
-          imageUrl:
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTg4iLBgHm-o1wj3ckRUfGw8aEjUZcUByOe-g&s',
-          degree: 'HRM',
-        },
-        {
-          id: '14',
-          fullName: 'Noah Wilson',
-          imageUrl:
-            'https://ogre.natalie.mu/media/pp/reona04/photo246.jpg?imwidth=1200&imdensity=1',
-          degree: 'HRM',
-        },
-        {
-          id: '15',
-          fullName: 'Olivia White',
-          imageUrl:
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTg4iLBgHm-o1wj3ckRUfGw8aEjUZcUByOe-g&s',
-          degree: 'BSED',
-        },
-        {
-          id: '16',
-          fullName: 'Paul Davis',
-          imageUrl:
-            'https://ogre.natalie.mu/media/pp/reona04/photo246.jpg?imwidth=1200&imdensity=1',
-          degree: 'BSED',
-        },
-        {
-          id: '17',
-          fullName: 'Quinn Miller',
-          imageUrl:
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTg4iLBgHm-o1wj3ckRUfGw8aEjUZcUByOe-g&s',
-          degree: 'HRM',
-        },
-        {
-          id: '18',
-          fullName: 'Ryan Scott',
-          imageUrl:
-            'https://ogre.natalie.mu/media/pp/reona04/photo246.jpg?imwidth=1200&imdensity=1',
-          degree: 'BSCB',
-        },
-        {
-          id: '19',
-          fullName: 'Sophia Adams',
-          imageUrl:
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTg4iLBgHm-o1wj3ckRUfGw8aEjUZcUByOe-g&s',
-          degree: 'BSIT',
-        },
-        {
-          id: '20',
-          fullName: 'Tom Baker',
-          imageUrl:
-            'https://ogre.natalie.mu/media/pp/reona04/photo246.jpg?imwidth=1200&imdensity=1',
-          degree: 'BSED',
-        },
-      ],
-    };
-  
-    return studentsData[courseId] || [];
-  };
-  
 
   const renderHeader = () => (
     <Animated.View
@@ -297,10 +138,9 @@ const CalendarScreen = () => {
           current={new Date().toISOString().split('T')[0]}
           onDayPress={onDayPress}
           markedDates={{
-            '2024-10-10': {marked: true, dotColor: '#4CAF50'},
-            '2024-10-15': {marked: true, dotColor: '#FFA726'},
-            '2024-10-20': {marked: true, dotColor: '#F44336'},
+            ...markedDates,
             [selectedDate]: {
+              ...markedDates[selectedDate],
               selected: true,
               selectedColor: '#E3F2FD',
               selectedTextColor: '#1976D2',
@@ -324,35 +164,32 @@ const CalendarScreen = () => {
             textMonthFontSize: 18,
             textMonthFontWeight: '700',
             textDayHeaderFontSize: 14,
-            'stylesheet.calendar.header': {
-              header: {
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                paddingLeft: 10,
-                paddingRight: 10,
-                marginTop: 6,
-                alignItems: 'center',
-                height: 40,
-              },
-            },
           }}
         />
       </Surface>
     </Animated.View>
   );
 
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 1, 0],
+    extrapolate: 'clamp',
+  });
+
   const ListHeaderComponent = () =>
     selectedDate ? (
       <View style={styles.headerContent}>
         <Text style={styles.dateHeader}>
-          {new Date(selectedDate).toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-          })}
+          {moment(selectedDate).format('dddd, MMMM D, YYYY')}
         </Text>
         <Text style={styles.classCount}>
-          {attendance.length} {attendance.length === 1 ? 'Class' : 'Classes'}
+          {selectedDaySchedules.length} {selectedDaySchedules.length === 1 ? 'Class' : 'Classes'}
         </Text>
       </View>
     ) : null;
@@ -374,8 +211,8 @@ const CalendarScreen = () => {
             minHeight: windowHeight - HEADER_MIN_HEIGHT,
           },
         ]}
-        data={attendance}
-        keyExtractor={item => item.id}
+        data={selectedDaySchedules}
+        keyExtractor={item => item._id}
         renderItem={renderItem}
         ListHeaderComponent={ListHeaderComponent}
         ListEmptyComponent={selectedDate ? renderEmptyState : null}
@@ -492,7 +329,7 @@ const styles = StyleSheet.create({
   },
   timeContainer: {
     flexDirection: 'column',
-    marginTop: -10
+    marginTop: -10,
   },
   icon: {
     marginRight: 4,
